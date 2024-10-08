@@ -14,6 +14,7 @@
 package symbolizer
 
 import (
+	"bytes"
 	"context"
 	"debug/elf"
 	"errors"
@@ -24,6 +25,7 @@ import (
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
+	"github.com/ulikunitz/xz"
 
 	debuginfopb "github.com/parca-dev/parca/gen/proto/go/parca/debuginfo/v1alpha1"
 	"github.com/parca-dev/parca/pkg/debuginfo"
@@ -132,6 +134,45 @@ func (s *Symbolizer) Symbolize(
 	return nil
 }
 
+func (s *Symbolizer) symbolize_with_elf(
+	ctx context.Context,
+	req SymbolizationRequest,
+	path string,
+	f *elf.File,
+	quality *debuginfopb.DebuginfoQuality,
+) error {
+	level.Debug(s.logger).Log("msg", "symbolize with elf", "file", path)
+	l := s.newLiner(path, f, quality, req.BuildID)
+	defer l.Close()
+
+	ei, err := profile.ExecutableInfoFromELF(f)
+	if err != nil {
+		return fmt.Errorf("executable info from ELF: %w", err)
+	}
+
+	for _, mapping := range req.Mappings {
+		for _, loc := range mapping.Locations {
+			if len(loc.Lines) > 0 {
+				continue
+			}
+			addr, err := NormalizeAddress(loc.Address, ei, profile.Mapping{
+				StartAddr: loc.Mapping.Start,
+				EndAddr:   loc.Mapping.Limit,
+				Offset:    loc.Mapping.Offset,
+			})
+			if err != nil {
+				return fmt.Errorf("normalize address: %w", err)
+			}
+
+			loc.Lines, err = l.PCToLines(ctx, addr)
+			if err != nil {
+				level.Debug(s.logger).Log("msg", "failed to get lines", "address", addr, "err", err)
+			}
+		}
+	}
+	return nil
+}
+
 func (s *Symbolizer) symbolize(
 	ctx context.Context,
 	req SymbolizationRequest,
@@ -148,33 +189,85 @@ func (s *Symbolizer) symbolize(
 		}
 	}()
 
-	l := s.newLiner(path, f, quality, req.BuildID)
-	defer l.Close()
-
-	ei, err := profile.ExecutableInfoFromELF(f)
+	err = s.symbolize_with_elf(ctx, req, path, f, quality)
 	if err != nil {
-		return fmt.Errorf("executable info from ELF: %w", err)
+		return err
 	}
 
-	for _, mapping := range req.Mappings {
-		for _, loc := range mapping.Locations {
-			addr, err := NormalizeAddress(loc.Address, ei, profile.Mapping{
-				StartAddr: loc.Mapping.Start,
-				EndAddr:   loc.Mapping.Limit,
-				Offset:    loc.Mapping.Offset,
-			})
-			if err != nil {
-				return fmt.Errorf("normalize address: %w", err)
-			}
-
-			loc.Lines, err = l.PCToLines(ctx, addr)
-			if err != nil {
-				level.Debug(s.logger).Log("msg", "failed to get lines", "err", err)
-			}
+	// try mini debuginfo
+	minidebug_path, minidebug_f, minidebug_q, err := s.getMiniDebuginfo(path)
+	if err != nil {
+		return err
+	}
+	if minidebug_f == nil {
+		return nil
+	}
+	defer func() {
+		if err := minidebug_f.Close(); err != nil {
+			level.Debug(s.logger).Log("msg", "failed to close mini debuginfo file", "err", err)
 		}
-	}
+	}()
 
+	err = s.symbolize_with_elf(ctx, req, minidebug_path, minidebug_f, minidebug_q)
+	if err != nil {
+		return err
+	}
 	return nil
+}
+
+func (s *Symbolizer) getMiniDebuginfo(path string) (string, *elf.File, *debuginfopb.DebuginfoQuality, error) {
+	f, err := elf.Open(path)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	defer func() {
+		if err := f.Close(); err != nil {
+			level.Debug(s.logger).Log("msg", "failed to close origin debuginfo file", "err", err)
+		}
+	}()
+
+	sec := f.Section(".gnu_debugdata")
+	if sec == nil {
+		return "", nil, nil, nil
+	}
+	minidebug_path := path + ".minidebug"
+	minidebug_e, err := elf.Open(minidebug_path)
+	if os.IsNotExist(err) {
+		level.Debug(s.logger).Log("msg", "uncompress mini debug info")
+		// decompress minidebug and write to file
+		data, err := sec.Data()
+		if err != nil {
+			return "", nil, nil, err
+		}
+		xzReader, err := xz.NewReader(bytes.NewReader(data))
+		if err != nil {
+			return "", nil, nil, err
+		}
+		var uncompressed bytes.Buffer
+		_, err = io.Copy(&uncompressed, xzReader)
+		if err != nil {
+			return "", nil, nil, err
+		}
+		minidebug_f, err := os.Create(minidebug_path)
+		if err != nil {
+			return "", nil, nil, err
+		}
+		minidebug_f.Write(uncompressed.Bytes())
+		minidebug_f.Close()
+		minidebug_e, err = elf.Open(minidebug_path)
+		if err != nil {
+			return "", nil, nil, err
+		}
+	} else if err != nil {
+		return "", nil, nil, err
+	}
+	minidebug_q := &debuginfopb.DebuginfoQuality{
+		HasDwarf:     elfutils.HasDWARF(minidebug_e),
+		HasGoPclntab: elfutils.HasGoPclntab(minidebug_e),
+		HasSymtab:    elfutils.HasSymtab(minidebug_e),
+		HasDynsym:    elfutils.HasDynsym(minidebug_e),
+	}
+	return minidebug_path, minidebug_e, minidebug_q, nil
 }
 
 func (s *Symbolizer) getDebuginfo(ctx context.Context, buildID string) (string, *elf.File, *debuginfopb.DebuginfoQuality, error) {
