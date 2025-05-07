@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - v*
+      - '!v*android'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.number || github.ref }}
