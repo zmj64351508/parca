@@ -84,6 +84,8 @@ export const RelativeDatePickerForPanel = ({
   }, [unit, value]);
 
   const presetRanges = [
+    {value: 1, unit: UNITS.MINUTE, text: 'Last 1 minute'},
+    {value: 5, unit: UNITS.MINUTE, text: 'Last 5 minutes'},
     {value: 15, unit: UNITS.MINUTE, text: 'Last 15 minutes'},
     {value: 1, unit: UNITS.HOUR, text: 'Last 1 hour'},
     {value: 3, unit: UNITS.HOUR, text: 'Last 3 hours'},
