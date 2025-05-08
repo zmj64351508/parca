@@ -101,8 +101,9 @@ func ArrowSchema(profileLabelFields []arrow.Field) *arrow.Schema {
 }
 
 type LocationLine struct {
-	Line     int64
-	Function *pb.Function
+	Line       int64
+	Function   *pb.Function
+	Inaccurate bool
 }
 
 type Location struct {

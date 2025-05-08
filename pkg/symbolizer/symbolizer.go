@@ -38,6 +38,7 @@ import (
 	"github.com/parca-dev/parca/pkg/symbol/addr2line"
 	"github.com/parca-dev/parca/pkg/symbol/demangle"
 	"github.com/parca-dev/parca/pkg/symbol/elfutils"
+	"github.com/parca-dev/parca/pkg/symbol/symbolsearcher"
 )
 
 var (
@@ -161,7 +162,17 @@ func (s *Symbolizer) symbolize_with_elf(
 	for _, mapping := range req.Mappings {
 		for _, loc := range mapping.Locations {
 			if len(loc.Lines) > 0 {
-				continue
+				inaccurate := false
+				// inaccurate symbols are worth to be tried again
+				for _, line := range loc.Lines {
+					if line.Inaccurate {
+						inaccurate = true
+						break
+					}
+				}
+				if !inaccurate {
+					continue
+				}
 			}
 			addr, err := NormalizeAddress(loc.Address, ei, profile.Mapping{
 				StartAddr: loc.Mapping.Start,
@@ -173,7 +184,7 @@ func (s *Symbolizer) symbolize_with_elf(
 			}
 
 			loc.Lines, err = l.PCToLines(ctx, addr)
-			if err != nil {
+			if err != nil && err != symbolsearcher.ErrInaccurateSymbol {
 				level.Debug(s.logger).Log("msg", "failed to get lines", "address", addr, "err", err)
 			}
 		}
@@ -573,7 +584,9 @@ func (c *cachedLiner) PCToLines(ctx context.Context, pc uint64) ([]profile.Locat
 	}
 
 	lines, err = c.liner.PCToLines(ctx, pc)
-	if err != nil {
+	if err == symbolsearcher.ErrInaccurateSymbol {
+		return lines, err
+	} else if err != nil {
 		return nil, fmt.Errorf("liner pctolines: %w", err)
 	}
 

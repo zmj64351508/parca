@@ -24,6 +24,8 @@ type Searcher struct {
 	symbols []elf.Symbol
 }
 
+var ErrInaccurateSymbol = errors.New("inaccurate symbol")
+
 func New(syms []elf.Symbol) Searcher {
 	newSyms := make([]elf.Symbol, 0, len(syms))
 	for _, s := range syms {
@@ -57,6 +59,9 @@ func (s Searcher) Search(addr uint64) (string, error) {
 
 	// sym[i-1] <= addr < sym[i]
 	i--
+	if addr >= s.symbols[i].Value+s.symbols[i].Size {
+		return s.symbols[i].Name, ErrInaccurateSymbol
+	}
 	return s.symbols[i].Name, nil
 }
 

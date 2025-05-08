@@ -78,6 +78,12 @@ func (lnr *SymtabLiner) PCRange() ([2]uint64, error) {
 // PCToLines looks up the line number information for a program counter (memory address).
 func (lnr *SymtabLiner) PCToLines(ctx context.Context, addr uint64) (lines []profile.LocationLine, err error) {
 	name, err := lnr.searcher.Search(addr)
+	isInaccurate := false
+	if err == symbolsearcher.ErrInaccurateSymbol {
+		err = nil
+		isInaccurate = true
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -98,10 +104,17 @@ func (lnr *SymtabLiner) PCToLines(ctx context.Context, addr uint64) (lines []pro
 	if isplt {
 		result.Name = result.Name + pltSuffix
 	}
+	if isInaccurate {
+		result.Name = "(maybe)" + result.Name
+	}
 	lines = append(lines, profile.LocationLine{
-		Line:     line,
-		Function: result,
+		Line:       line,
+		Function:   result,
+		Inaccurate: isInaccurate,
 	})
+	if isInaccurate {
+		return lines, symbolsearcher.ErrInaccurateSymbol
+	}
 	return lines, nil
 }
 
