@@ -17,7 +17,7 @@ else
 	COMMIT := $(shell echo $(GITHUB_SHA) | cut -c1-8)
 endif
 VERSION ?= $(if $(RELEASE_TAG),$(RELEASE_TAG),$(shell $(CMD_GIT) describe --tags --match='v*' || echo '$(subst /,-,$(BRANCH))$(COMMIT_TIMESTAMP)$(COMMIT)'))
-OUT_DOCKER ?= ghcr.io/parca-dev/parca
+OUT_DOCKER ?= docker.io/zmj64351508/parca
 
 ENABLE_RACE := no
 
@@ -154,7 +154,7 @@ container-dev:
 .PHONY: container
 container:
 	podman build \
-		--platform linux/amd64,linux/arm64 \
+		--platform linux/amd64 \
 		--timestamp 0 \
 		--manifest $(OUT_DOCKER):$(VERSION) .
 

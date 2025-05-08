@@ -30,6 +30,10 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Free up disk space
+        run: |
+          ./scripts/free_disk_space.sh
+
       - name: Set up Go
         uses: actions/setup-go@f111f3307d8850f501ac008e886eec1fd1932a34 # v5.3.0
         with:
@@ -64,3 +68,95 @@ jobs:
           path: |
             dist
             !dist/*.txt
+
+  manifests:
+    name: Generate and release Kubernetes Manifests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: release
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Go
+        uses: actions/setup-go@f111f3307d8850f501ac008e886eec1fd1932a34 # v5.3.0
+        with:
+          go-version-file: .go-version
+
+      - name: Set up Jsonnet
+        run: ./env-jsonnet.sh
+
+      - name: Generate
+        run: cd deploy && make --always-make vendor manifests
+
+      - name: Prepare
+        run: |
+          tar -zcvf deploy/manifests.tar.gz deploy/manifests
+          cp deploy/manifests/kubernetes/manifest.yaml deploy/kubernetes-manifest.yaml
+          cp deploy/manifests/openshift/manifest.yaml deploy/openshift-manifest.yaml
+
+      - name: Release
+        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v0.1.15
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            deploy/manifests.tar.gz
+            deploy/kubernetes-manifest.yaml
+            deploy/openshift-manifest.yaml
+
+  container:
+    name: Build and release container images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: release
+    container:
+      # https://github.com/containers/podman/tree/main/contrib/podmanimage
+      image: quay.io/containers/podman:v4.9.4
+      options: >-
+        --device /dev/fuse:rw
+        --privileged
+        --security-opt label=disable
+        --security-opt seccomp=unconfined
+    permissions:
+      id-token: write
+      packages: write
+      contents: read
+
+    steps:
+      - name: Install dependencies
+        run: dnf install --assumeyes --repo fedora git make jq
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      # The checkout action is supposed to take care of it, but it is not enough :/
+      - name: Add repository directory to the git global config as a safe directory
+        run: git config --global --add safe.directory /__w/parca/parca
+
+      - uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
+        with:
+          name: parca-dist-release
+          path: dist
+
+      - name: Get branch name
+        shell: bash
+        run: echo "GITHUB_BRANCH_NAME=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+
+      - name: Build container
+        run: make container
+
+      - name: Check images created
+        run: podman images | grep 'docker.io/zmj64351508/parca'
+
+      - name: Login to registry
+        run: |
+          echo "${{ secrets.PERSONAL_ACCESS_TOKEN }}" | podman login -u zmj64351508 --password-stdin docker.io
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@d7d6bc7722e3daa8354c50bcb52f4837da5e9b6a # v3.8.1
+
+      - name: Install crane
+        uses: imjasonh/setup-crane@00c9e93efa4e1138c9a7a5c594acd6c75a2fbf0c # v0.3
+
+      - name: Push container
+        run: |
+          make push-container
