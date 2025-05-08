@@ -70,3 +70,7 @@ func (c *BadgerCache) Set(ctx context.Context, buildID string, addr uint64, line
 		return txn.Set(c.makeKey(buildID, addr), encodeLines(lines))
 	})
 }
+
+func (c *BadgerCache) Clear(ctx context.Context) error {
+	return c.db.DropAll()
+}

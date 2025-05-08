@@ -90,6 +90,7 @@ type DebuginfoFetcher interface {
 type SymbolizerCache interface {
 	Get(ctx context.Context, buildID string, addr uint64) ([]profile.LocationLine, bool, error)
 	Set(ctx context.Context, buildID string, addr uint64, lines []profile.LocationLine) error
+	Clear(ctx context.Context) error
 }
 
 func New(
@@ -316,7 +317,12 @@ func (s *Symbolizer) getDebuginfo(ctx context.Context, buildID string) (string, 
 	}
 
 	targetPath := filepath.Join(s.tmpDir, buildID)
-	if _, err := os.Stat(targetPath); errors.Is(err, os.ErrNotExist) {
+	if stat, err := os.Stat(targetPath); errors.Is(err, os.ErrNotExist) || stat.ModTime().Before(dbginfo.Upload.FinishedAt.AsTime()) {
+		if !errors.Is(err, os.ErrNotExist) {
+			level.Debug(s.logger).Log("msg", "clear symbol cache due to debuginfo updated", buildID)
+			s.cache.Clear(ctx)
+		}
+
 		// Fetch the debug info for the build ID.
 		rc, err := s.debuginfo.FetchDebuginfo(ctx, dbginfo)
 		if err != nil {
