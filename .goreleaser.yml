@@ -41,7 +41,7 @@ release:
   footer: |
     ## Docker images
 
-    `docker pull ghcr.io/parca-dev/parca:{{ .Tag }}`
+    `docker pull docker.io/zmj64351508/parca:{{ .Tag }}`
 
     ## Thanks!
 
