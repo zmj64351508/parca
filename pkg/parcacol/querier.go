@@ -118,18 +118,20 @@ func (q *Querier) Labels(
 	err := q.engine.ScanTable(q.tableName).
 		Filter(logicalplan.And(filterExpr...)).
 		Project(logicalplan.DynCol(profile.ColumnLabels)).
+		Limit(logicalplan.Literal(1000)).
 		Execute(ctx, func(ctx context.Context, r arrow.Record) error {
 			r.Retain()
 			for i := 0; i < int(r.NumCols()); i++ {
 				col := r.ColumnName(i)
+				seen[strings.TrimPrefix(col, "labels.")] = struct{}{}
 
-				values := r.Column(i)
-				for j := 0; j < values.Len(); j++ {
-					if !values.IsNull(j) {
-						seen[strings.TrimPrefix(col, "labels.")] = struct{}{}
-						break
-					}
-				}
+				//values := r.Column(i)
+				//for j := 0; j < values.Len(); j++ {
+				//	if !values.IsNull(j) {
+				//		seen[strings.TrimPrefix(col, "labels.")] = struct{}{}
+				//		break
+				//	}
+				//}
 			}
 
 			return nil
