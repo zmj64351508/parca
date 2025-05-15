@@ -26,6 +26,7 @@ import (
 	"github.com/apache/arrow-go/v18/arrow/memory"
 	"github.com/apache/arrow-go/v18/arrow/scalar"
 	"github.com/go-kit/log"
+	"github.com/go-kit/log/level"
 	"github.com/polarsignals/frostdb/pqarrow/arrowutils"
 	"github.com/polarsignals/frostdb/query"
 	"github.com/polarsignals/frostdb/query/logicalplan"
@@ -115,25 +116,39 @@ func (q *Querier) Labels(
 		)
 	}
 
-	err := q.engine.ScanTable(q.tableName).
-		Filter(logicalplan.And(filterExpr...)).
-		Project(logicalplan.DynCol(profile.ColumnLabels)).
-		Execute(ctx, func(ctx context.Context, r arrow.Record) error {
-			r.Retain()
-			for i := 0; i < int(r.NumCols()); i++ {
-				col := r.ColumnName(i)
+	start := time.Now()
+	//err := q.engine.ScanTable(q.tableName).
+	//	Filter(logicalplan.And(filterExpr...)).
+	//	Project(logicalplan.DynCol(profile.ColumnLabels)).
+	//	Execute(ctx, func(ctx context.Context, r arrow.Record) error {
+	//		r.Retain()
+	//		for i := 0; i < int(r.NumCols()); i++ {
+	//			col := r.ColumnName(i)
 
-				values := r.Column(i)
-				for j := 0; j < values.Len(); j++ {
-					if !values.IsNull(j) {
-						seen[strings.TrimPrefix(col, "labels.")] = struct{}{}
-						break
-					}
-				}
+	//			values := r.Column(i)
+	//			for j := 0; j < values.Len(); j++ {
+	//				if !values.IsNull(j) {
+	//					seen[strings.TrimPrefix(col, "labels.")] = struct{}{}
+	//					break
+	//				}
+	//			}
+	//		}
+
+	//		return nil
+	//	})
+
+	err := q.engine.ScanSchema(q.tableName).
+		Distinct(logicalplan.Col("name")).
+		Filter(logicalplan.Col("name").RegexMatch("^labels\\..+$")).
+		Execute(ctx, func(_ context.Context, r arrow.Record) error {
+			arr := r.Column(0)
+			for i := 0; i < arr.Len(); i++ {
+				label := arr.(*array.String).Value(i)
+				seen[strings.TrimPrefix(label, "labels.")] = struct{}{}
 			}
-
 			return nil
 		})
+	level.Debug(q.logger).Log("msg", "Query time Labels", "ms", time.Since(start).Milliseconds())
 	if err != nil {
 		return nil, err
 	}
@@ -176,6 +191,7 @@ func (q *Querier) Values(
 			logicalplan.Col(profile.ColumnTimestamp).Lt(logicalplan.Literal(end)))
 	}
 
+	start := time.Now()
 	err := q.engine.ScanTable(q.tableName).
 		Filter(logicalplan.And(filterExpr...)).
 		Distinct(logicalplan.Col("labels."+labelName)).
@@ -208,6 +224,7 @@ func (q *Querier) Values(
 
 			return nil
 		})
+	level.Debug(q.logger).Log("msg", "Query time Values", "ms", time.Since(start).Milliseconds())
 	if err != nil {
 		return nil, err
 	}
@@ -469,6 +486,7 @@ func (q *Querier) queryRangeDelta(
 		).Alias(ValuePerSecond)
 	}
 
+	start := time.Now()
 	err := q.engine.ScanTable(q.tableName).
 		Filter(filterExpr).
 		Project(preProjection...).
@@ -501,6 +519,7 @@ func (q *Querier) queryRangeDelta(
 			rows += int(r.NumRows())
 			return nil
 		})
+	level.Debug(q.logger).Log("msg", "Query time queryRangeDelta", "ms", time.Since(start).Milliseconds())
 	if err != nil {
 		return nil, err
 	}
@@ -649,6 +668,7 @@ func (q *Querier) queryRangeNonDelta(ctx context.Context, filterExpr logicalplan
 
 	valueSum := logicalplan.Sum(logicalplan.Col(profile.ColumnValue))
 	valueSumColumn := valueSum.Name()
+	start := time.Now()
 	err := q.engine.ScanTable(q.tableName).
 		Filter(filterExpr).
 		Aggregate(
@@ -666,6 +686,7 @@ func (q *Querier) queryRangeNonDelta(ctx context.Context, filterExpr logicalplan
 			rows += int(r.NumRows())
 			return nil
 		})
+	level.Debug(q.logger).Log("msg", "Query time queryRangeNoDelta", "ms", time.Since(start).Milliseconds())
 	if err != nil {
 		return nil, err
 	}
@@ -789,6 +810,7 @@ func (q *Querier) ProfileTypes(
 	seen := map[string]struct{}{}
 	res := []*pb.ProfileType{}
 
+	start := time.Now()
 	err := q.engine.ScanTable(q.tableName).
 		Distinct(
 			logicalplan.Col(profile.ColumnName),
@@ -863,6 +885,7 @@ func (q *Querier) ProfileTypes(
 
 			return nil
 		})
+	level.Debug(q.logger).Log("msg", "Query time ProfileTypes", "ms", time.Since(start).Milliseconds())
 	if err != nil {
 		return nil, err
 	}
@@ -1334,6 +1357,7 @@ func (q *Querier) findSingle(ctx context.Context, query string, t time.Time) ([]
 		aggrFunctions = append(aggrFunctions, durationSum)
 	}
 
+	start := time.Now()
 	records := []arrow.Record{}
 	err = q.engine.ScanTable(q.tableName).
 		Filter(filterExpr).
@@ -1348,6 +1372,7 @@ func (q *Querier) findSingle(ctx context.Context, query string, t time.Time) ([]
 			records = append(records, r)
 			return nil
 		})
+	level.Debug(q.logger).Log("msg", "Query time findSingle", "ms", time.Since(start).Milliseconds())
 	if err != nil {
 		return nil, "", queryParts, fmt.Errorf("execute query: %w", err)
 	}
@@ -1466,6 +1491,7 @@ func (q *Querier) selectMerge(
 	}
 
 	records := []arrow.Record{}
+	start_ := time.Now()
 	err = q.engine.ScanTable(q.tableName).
 		Filter(filterExpr).
 		Project(firstProject...).
@@ -1479,6 +1505,7 @@ func (q *Querier) selectMerge(
 			records = append(records, r)
 			return nil
 		})
+	level.Debug(q.logger).Log("msg", "Query time selectMerge", "ms", time.Since(start_).Milliseconds())
 	if err != nil {
 		return nil, "", queryParts, err
 	}
@@ -1516,6 +1543,7 @@ func (q *Querier) GetProfileMetadataMappings(
 	)
 
 	records := make(map[string]struct{})
+	start_ := time.Now()
 	err = q.engine.ScanTable(q.tableName).
 		Filter(filterExpr).
 		Project(logicalplan.Col("stacktrace")).
@@ -1543,6 +1571,7 @@ func (q *Querier) GetProfileMetadataMappings(
 
 			return nil
 		})
+	level.Debug(q.logger).Log("msg", "Query time GetProfileMetadataMappings", "ms", time.Since(start_).Milliseconds())
 	if err != nil {
 		return nil, err
 	}
@@ -1581,6 +1610,7 @@ func (q *Querier) GetProfileMetadataLabels(
 
 	seen := map[string]struct{}{}
 
+	start_ := time.Now()
 	err = q.engine.ScanTable(q.tableName).
 		Filter(filterExpr).
 		Project(logicalplan.DynCol("labels")).
@@ -1597,6 +1627,7 @@ func (q *Querier) GetProfileMetadataLabels(
 			}
 			return nil
 		})
+	level.Debug(q.logger).Log("msg", "Query time GetProfileMetadataLabels", "ms", time.Since(start_).Milliseconds())
 	if err != nil {
 		return nil, err
 	}
