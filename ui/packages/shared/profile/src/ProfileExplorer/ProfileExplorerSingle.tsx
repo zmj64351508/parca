@@ -18,6 +18,7 @@ import type {NavigateFunction} from '@parca/utilities';
 
 import {ProfileSelection, ProfileViewWithData} from '..';
 import ProfileSelector, {QuerySelection} from '../ProfileSelector';
+import { useQueryType } from '../QueryTypeSelector';
 
 interface ProfileExplorerSingleProps {
   queryClient: QueryServiceClient;
@@ -37,7 +38,7 @@ const ProfileExplorerSingle = ({
   navigateTo,
 }: ProfileExplorerSingleProps): JSX.Element => {
   const [showMetricsGraph, setShowMetricsGraph] = useState(true);
-
+  const queryType = useQueryType()
   return (
     <>
       <div className="relative">
@@ -57,7 +58,7 @@ const ProfileExplorerSingle = ({
         />
       </div>
 
-      {profile != null ? (
+      {profile != null && queryType != 'metrics-only' ? (
         <ProfileViewWithData queryClient={queryClient} profileSource={profile.ProfileSource()} />
       ) : (
         <></>

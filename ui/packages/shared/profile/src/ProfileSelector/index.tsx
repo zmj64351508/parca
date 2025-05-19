@@ -315,6 +315,7 @@ const ProfileSelector = ({
             profileType={profileType}
             profileTypesError={error}
             viewComponent={viewComponent}
+            showQueryType={!comparing}
           />
           {comparing && (
             <div>

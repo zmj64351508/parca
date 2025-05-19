@@ -25,6 +25,7 @@ import {QuerySelection, useProfileTypes} from '../ProfileSelector';
 import {sumByToParam, useSumByFromParams} from '../useSumBy';
 import ProfileExplorerCompare from './ProfileExplorerCompare';
 import ProfileExplorerSingle from './ProfileExplorerSingle';
+import {QueryTypeProvider} from '../QueryTypeSelector';
 
 interface ProfileExplorerProps {
   queryClient: QueryServiceClient;
@@ -413,11 +414,13 @@ const ProfileExplorer = ({
   return (
     <Provider store={reduxStore}>
       <KeyDownProvider>
-        <ProfileExplorerApp
-          queryClient={queryClient}
-          queryParams={queryParams}
-          navigateTo={navigateTo}
-        />
+        <QueryTypeProvider>
+          <ProfileExplorerApp
+            queryClient={queryClient}
+            queryParams={queryParams}
+            navigateTo={navigateTo}
+          />
+        </QueryTypeProvider>
       </KeyDownProvider>
     </Provider>
   );

@@ -23,6 +23,7 @@ import MatchersInput from '../MatchersInput';
 import ProfileTypeSelector from '../ProfileTypeSelector';
 import SimpleMatchers from '../SimpleMatchers';
 import ViewMatchers from '../ViewMatchers';
+import QueryTypeSelector, { activateQueryType, useQueryTypeContext } from '../QueryTypeSelector';
 
 interface SelectOption {
   label: string;
@@ -62,6 +63,7 @@ interface QueryControlsProps {
   setUserSumBySelection: (sumBy: string[]) => void;
   sumByRef: React.RefObject<SelectInstance>;
   profileType: ProfileType;
+  showQueryType: boolean;
 }
 
 export function QueryControls({
@@ -90,7 +92,9 @@ export function QueryControls({
   profileType,
   showSumBySelector,
   profileTypesError,
+  showQueryType,
 }: QueryControlsProps): JSX.Element {
+  const queryTypeContext = useQueryTypeContext()
   return (
     <div className="flex w-full flex-wrap items-start gap-2">
       {showProfileTypeSelector && (
@@ -221,12 +225,22 @@ export function QueryControls({
       <DateTimeRangePicker onRangeSelection={setTimeRangeSelection} range={timeRangeSelection} />
 
       <div>
+        {showQueryType && (
+          <div>
+            <label className="text-xs">Query type</label>
+            <QueryTypeSelector disabled={!showQueryType} visable={showQueryType}/>
+          </div>
+        )}
+      </div>
+
+      <div>
         <label className="text-xs">&nbsp;</label>
         <Button
           disabled={searchDisabled}
           onClick={(e: React.MouseEvent<HTMLElement>) => {
             e.preventDefault();
             setQueryExpression(true);
+            activateQueryType(queryTypeContext);
           }}
           id="h-matcher-search-button"
         >
