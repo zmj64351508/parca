@@ -48,6 +48,7 @@ export interface QuerySelection {
 
 interface ProfileSelectorFeatures {
   showMetricsGraph: boolean;
+  showMetricsStats: boolean;
   showSumBySelector?: boolean;
   showProfileTypeSelector?: boolean;
   disableExplorativeQuerying?: boolean;
@@ -85,6 +86,7 @@ interface ProfileSelectorProps extends ProfileSelectorFeatures {
   comparing: boolean;
   navigateTo: NavigateFunction;
   setDisplayHideMetricsGraphButton?: Dispatch<SetStateAction<boolean>>;
+  setDisplayHideMetricsStatsButton?: Dispatch<SetStateAction<boolean>>;
   suffix?: string;
   utilizationMetrics?: Array<{
     name: string;
@@ -132,10 +134,12 @@ const ProfileSelector = ({
   comparing,
   navigateTo,
   showMetricsGraph = true,
+  showMetricsStats = false,
   showSumBySelector = true,
   showProfileTypeSelector = true,
   disableExplorativeQuerying = false,
   setDisplayHideMetricsGraphButton,
+  setDisplayHideMetricsStatsButton,
   utilizationMetrics,
   utilizationMetricsLoading,
   utilizationLabels,
@@ -326,6 +330,8 @@ const ProfileSelector = ({
         <MetricsGraphSection
           showMetricsGraph={showMetricsGraph}
           setDisplayHideMetricsGraphButton={setDisplayHideMetricsGraphButton}
+          showMetricsStats={showMetricsStats}
+          setDisplayHideMetricsStatsButton={setDisplayHideMetricsStatsButton}
           heightStyle={
             utilizationMetrics !== undefined && utilizationMetrics?.length > 0
               ? 'auto'

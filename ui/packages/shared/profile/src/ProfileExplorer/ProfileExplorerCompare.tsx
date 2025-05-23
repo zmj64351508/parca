@@ -51,6 +51,7 @@ const ProfileExplorerCompare = ({
   navigateTo,
 }: ProfileExplorerCompareProps): JSX.Element => {
   const [showMetricsGraph, setShowMetricsGraph] = useState(true);
+  const [showMetricsStats, setShowMetricsStats] = useState(false);
 
   const closeProfileA = (): void => {
     closeProfile('A');
@@ -80,6 +81,8 @@ const ProfileExplorerCompare = ({
             suffix="_a"
             showMetricsGraph={showMetricsGraph}
             setDisplayHideMetricsGraphButton={setShowMetricsGraph}
+            showMetricsStats={showMetricsStats}
+            setDisplayHideMetricsStatsButton={setShowMetricsStats}
           />
         </div>
         <div className="flex-column flex-1 p-2 shadow-md rounded-md">
@@ -96,6 +99,8 @@ const ProfileExplorerCompare = ({
             suffix="_b"
             showMetricsGraph={showMetricsGraph}
             setDisplayHideMetricsGraphButton={setShowMetricsGraph}
+            showMetricsStats={showMetricsStats}
+            setDisplayHideMetricsStatsButton={setShowMetricsStats}
           />
         </div>
       </div>

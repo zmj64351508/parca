@@ -14,7 +14,7 @@
 import cx from 'classnames';
 
 import {Label, QueryServiceClient} from '@parca/client';
-import {DateTimeRange} from '@parca/components';
+import {DateTimeRange, useParcaContext} from '@parca/components';
 import {Query} from '@parca/parser';
 
 import {MergedProfileSelection, ProfileSelection} from '..';
@@ -22,10 +22,14 @@ import UtilizationMetricsGraph from '../MetricsGraph/UtilizationMetrics';
 import AreaChart from '../MetricsGraph/UtilizationMetrics/AreaChart';
 import ProfileMetricsGraph, {ProfileMetricsEmptyState} from '../ProfileMetricsGraph';
 import {QuerySelection, type UtilizationMetrics as UtilizationMetricsType} from './index';
+import ProfileMetricsTable from "../ProfileMetricsTable"
+import {ProfileMetricsHeader} from '../ProfileMetricsHeader';
 
 interface MetricsGraphSectionProps {
   showMetricsGraph: boolean;
   setDisplayHideMetricsGraphButton?: (show: boolean) => void;
+  showMetricsStats: boolean;
+  setDisplayHideMetricsStatsButton?: (show: boolean) => void;
   heightStyle: string;
   querySelection: QuerySelection;
   profileSelection: ProfileSelection | null;
@@ -51,6 +55,8 @@ interface MetricsGraphSectionProps {
 export function MetricsGraphSection({
   showMetricsGraph,
   setDisplayHideMetricsGraphButton,
+  showMetricsStats,
+  setDisplayHideMetricsStatsButton,
   heightStyle,
   querySelection,
   profileSelection,
@@ -67,6 +73,9 @@ export function MetricsGraphSection({
   utilizationMetrics,
   utilizationMetricsLoading,
 }: MetricsGraphSectionProps): JSX.Element {
+  const {
+    timezone,
+  } = useParcaContext();
   const handleTimeRangeChange = (range: DateTimeRange): void => {
     const from = range.getFromMs();
     const to = range.getToMs();
@@ -200,25 +209,40 @@ export function MetricsGraphSection({
   };
 
   return (
-    <div className={cx('relative', {'py-4': !showMetricsGraph})}>
-      {setDisplayHideMetricsGraphButton != null ? (
-        <button
-          onClick={() => setDisplayHideMetricsGraphButton(!showMetricsGraph)}
-          className={cx(
-            'hidden px-3 py-1 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-gray-900 z-10',
-            showMetricsGraph && 'absolute right-0 bottom-3 !flex',
-            !showMetricsGraph && 'relative !flex ml-auto'
-          )}
-        >
-          {showMetricsGraph ? 'Hide' : 'Show'} Metrics Graph
-        </button>
-      ) : null}
+    <div className={'py-4'}>
+      <div className={"flex justify-between"}>
+        <div className={"flex items-center gap-2"}>
+          <ProfileMetricsHeader profileSourceString={profileSelection?.ProfileSource()?.toString(timezone)} />
+        </div>
+        <div className={"flex justify-end gap-2 mb-2"}>
+          {setDisplayHideMetricsStatsButton != null ? (
+            <button
+              onClick={() => setDisplayHideMetricsStatsButton(!showMetricsStats)}
+              className={cx(
+                'px-3 py-1 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-gray-900 z-10',
+              )}
+            >
+              {showMetricsStats ? 'Hide' : 'Show'} Metrics Statistics
+            </button>
+          ) : null}
+          {setDisplayHideMetricsGraphButton != null ? (
+            <button
+              onClick={() => setDisplayHideMetricsGraphButton(!showMetricsGraph)}
+              className={cx(
+                'px-3 py-1 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-gray-900 z-10',
+              )}
+            >
+              {showMetricsGraph ? 'Hide' : 'Show'} Metrics Graph
+            </button>
+          ) : null}
+        </div>
+      </div>
       {showMetricsGraph && (
         <>
           <div style={{height: heightStyle}}>
             {querySelection.expression !== '' &&
-            querySelection.from !== undefined &&
-            querySelection.to !== undefined ? (
+              querySelection.from !== undefined &&
+              querySelection.to !== undefined ? (
               <>
                 {utilizationMetrics !== undefined ? (
                   <UtilizationGraphToShow utilizationMetrics={utilizationMetrics} />
@@ -247,6 +271,22 @@ export function MetricsGraphSection({
                 </div>
               )
             )}
+          </div>
+        </>
+      )}
+      {showMetricsStats && (
+        <>
+          <div className={cx('py-2')}>
+            <ProfileMetricsTable
+              queryClient={queryClient}
+              queryExpression={querySelection.expression}
+              from={querySelection.from}
+              to={querySelection.to}
+              profile={profileSelection}
+              comparing={comparing}
+              sumBy={querySelection.sumBy ?? sumBy ?? []}
+              sumByLoading={defaultSumByLoading}
+            />
           </div>
         </>
       )}

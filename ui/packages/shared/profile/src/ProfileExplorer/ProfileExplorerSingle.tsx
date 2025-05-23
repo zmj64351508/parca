@@ -38,6 +38,7 @@ const ProfileExplorerSingle = ({
   navigateTo,
 }: ProfileExplorerSingleProps): JSX.Element => {
   const [showMetricsGraph, setShowMetricsGraph] = useState(true);
+  const [showMetricsStats, setShowMetricsStats] = useState(false);
   const queryType = useQueryType()
   return (
     <>
@@ -55,6 +56,8 @@ const ProfileExplorerSingle = ({
           suffix="_a"
           showMetricsGraph={showMetricsGraph}
           setDisplayHideMetricsGraphButton={setShowMetricsGraph}
+          showMetricsStats={showMetricsStats}
+          setDisplayHideMetricsStatsButton={setShowMetricsStats}
         />
       </div>
 
